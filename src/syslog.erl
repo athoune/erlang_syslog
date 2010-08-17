@@ -25,7 +25,7 @@
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, 
-         handle_info/2, terminate/2, code_change/3]).
+         handle_info/2, terminate/2, code_change/3, timestamp/0]).
 
 %% api callbacks
 -export([start_link/0, send/3, send/4]).
@@ -86,7 +86,7 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
 handle_cast({send, Who, Level, Msg}, State) ->
-    Packet = ["<", atom_to_level(Level)+48, "> ", atom_to_list(Who), ": ", Msg, "\n"],
+    Packet = ["<", atom_to_level(Level)+48, ">", timestamp(), " ", inet:gethostname(), " ", atom_to_list(Who), ": ", Msg, "\n"],
     do_send(State, Packet),
     {noreply, State};
     
@@ -135,3 +135,23 @@ atom_to_level(warning) -> 4; % warning conditions
 atom_to_level(notice) -> 5; % normal but significant condition 
 atom_to_level(info) -> 6; % informational
 atom_to_level(debug) -> 7. % debug-level messages 
+
+timestamp() ->
+	{{_Year,Month,Day},{Hour,Min,Sec}} = erlang:localtime(),
+	M = case Month of
+		1 -> "Jan";
+		2 -> "Feb";
+		3 -> "Mar";
+		4 -> "Apr";
+		5 -> "May";
+		6 -> "Jun";
+		7 -> "Jul";
+		8 -> "Aug";
+		9 -> "Sep";
+		10-> "Oct";
+		11-> "Nov";
+		12-> "Dec"
+	end,
+	io_lib:format("~p ~2.10.0B ~2.10.0B:~2.10.0B:~2.10.0B",
+	        [M, Day, Hour, Min, Sec])
+	.
