@@ -20,6 +20,8 @@
 %% WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 %% FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 %% OTHER DEALINGS IN THE SOFTWARE.
+
+%% http://www.faqs.org/rfcs/rfc3164.html
 -module(syslog).
 -behaviour(gen_server).
 
@@ -86,14 +88,11 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
 handle_cast({send, Who, Level, Msg}, State) ->
-	{ok, Hostname} = inet:gethostname(),
-    Packet = ["<", atom_to_level(Level)+48, ">", timestamp(), " ", Hostname, " ", atom_to_list(Who), "[0]: ",  Msg, "\n"],
-		io:fwrite(Packet),
-    do_send(State, Packet),
-    {noreply, State};
+    handle_cast({send, 0, Who, Level, Msg}, State);
     
 handle_cast({send, Facility, Who, Level, Msg}, State) ->
-    Packet = ["<", (Facility bor atom_to_level(Level))+48, "> ", atom_to_list(Who), ": ", Msg, "\n"],
+    {ok, Hostname} = inet:gethostname(),
+    Packet = ["<", (Facility bor atom_to_level(Level))+48, ">", timestamp(), " ", Hostname, " ", atom_to_list(Who), "[0]: ",  Msg, "\n"],
     do_send(State, Packet),
     {noreply, State}.
     
