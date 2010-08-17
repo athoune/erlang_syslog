@@ -86,7 +86,9 @@ handle_call(_Msg, _From, State) ->
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
 handle_cast({send, Who, Level, Msg}, State) ->
-    Packet = ["<", atom_to_level(Level)+48, ">", timestamp(), " ", inet:gethostname(), " ", atom_to_list(Who), ": ", Msg, "\n"],
+	{ok, Hostname} = inet:gethostname(),
+    Packet = ["<", atom_to_level(Level)+48, ">", timestamp(), " ", Hostname, " ", atom_to_list(Who), "[0]: ",  Msg, "\n"],
+		io:fwrite(Packet),
     do_send(State, Packet),
     {noreply, State};
     
@@ -152,6 +154,6 @@ timestamp() ->
 		11-> "Nov";
 		12-> "Dec"
 	end,
-	io_lib:format("~p ~2.10.0B ~2.10.0B:~2.10.0B:~2.10.0B",
+	io_lib:format("~s ~2.10.0B ~2.10.0B:~2.10.0B:~2.10.0B",
 	        [M, Day, Hour, Min, Sec])
 	.
