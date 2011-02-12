@@ -25,12 +25,20 @@
 -module(syslog).
 -behaviour(gen_server).
 
+%%-include_lib("ejabberd/include/ejabberd.hrl").
+
+
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, 
          handle_info/2, terminate/2, code_change/3, timestamp/0]).
 
 %% api callbacks
--export([start_link/0, send/3, send/4, send/7]).
+-export([
+    start_link/0, 
+    %%send/3,
+    %%send/4,
+    send/6
+]).
 
 -record(state, {socket, address, port, facility}).
 
@@ -40,14 +48,18 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-send(Who, Level, Msg) when is_atom(Who), is_atom(Level), is_list(Msg) ->
-    gen_server:cast(?MODULE, {send, Who, Level, Msg}).
+%%send(Who, Level, Msg) when is_atom(Who), is_atom(Level), is_list(Msg) ->
+%%    gen_server:cast(?MODULE, {send, Who, Level, Msg}).
 
-send(Facility, Who, Level, Msg) when is_integer(Facility), is_atom(Who), is_atom(Level), is_list(Msg) ->
-    gen_server:cast(?MODULE, {send, Facility, Who, Level, Msg}).
+%%send(Facility, Who, Level, Msg) when is_integer(Facility), is_atom(Who), is_atom(Level), is_list(Msg) ->
+%%    gen_server:cast(?MODULE, {send, Facility, Who, Level, Msg}).
 
-send(Module, Pid, Line, Facility, Who, Level, Msg) ->
-    gen_server:cast(?MODULE, {send, Module, Pid, Line, Facility, Who, Level, Msg}).
+send(Module, Pid, Line, Who, Level, Msg)
+%%        when is_integer(Line), is_atom(Who), is_atom(Level), is_list(Msg) ->
+    ->
+    %%?INFO_MSG("send ~p", [Module, Pid, Line, Who, Level, Msg]),
+    ejabberd_logger:debug_msg(?MODULE,?LINE,"syslog send ~p", [Module, Pid, Line, Who, Level, Msg]),
+    gen_server:cast(?MODULE, {send, Module, Pid, Line, Who, Level, Msg}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -63,6 +75,7 @@ send(Module, Pid, Line, Facility, Who, Level, Msg) ->
 init([]) ->
     case gen_udp:open(0) of
         {ok, Socket} -> 
+            %%ejabberd_logger:debug_msg(?MODULE,?LINE,"syslog start ~p", []),
             {ok, Hostname} = inet:gethostname(),
             {ok, #state{
                     socket = Socket,
@@ -91,22 +104,20 @@ handle_call(_Msg, _From, State) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
-handle_cast({send, Who, Level, Msg}, State) ->
-    handle_cast({send, 0, Who, Level, Msg}, State);
+%%handle_cast({send, Who, Level, Msg}, State) ->
+%%    handle_cast({send, 0, Who, Level, Msg}, State);
 
-handle_cast({send, Facility, Who, Level, Msg}, State) ->
+handle_cast({send, Module, Pid, Line, Who, Level, Msg}, State) ->
     {ok, Hostname} = inet:gethostname(),
-    Packet = ["<", (Facility bor atom_to_level(Level))+48, ">", timestamp(), " ", Hostname, " ", atom_to_list(Who), "[0]: ",  Msg, "\n"],
-    do_send(State, Packet),
-    {noreply, State}.
-
-handle_cast({send, Module, Pid, Line, Who, Level, Msg}) ->
-    {ok, Hostname} = inet:gethostname(),
-    Packet = ["<", (Facility bor atom_to_level(Level))+48, ">",
+    io:format("facility ~p", [
+        State#state.facility, atom_to_level(Level),
+        (State#state.facility bor atom_to_level(Level))+48
+    ]),
+    Packet = ["<", (State#state.facility bor atom_to_level(Level))+48, ">",
         timestamp(), " ", Hostname, " ", 
-        atom_to_list(Module), ":",
+        Module, "/",
         atom_to_list(Who),
-        "[", io_lib:format("~p",[Pid]), "]: ",
+        io_lib:format("[~p]: ~p: ",[Pid, Line]),
         Msg, "\n"],
     do_send(State, Packet),
     {noreply, State}.
@@ -171,5 +182,4 @@ timestamp() ->
 		12-> "Dec"
 	end,
 	io_lib:format("~s ~2.10.0B ~2.10.0B:~2.10.0B:~2.10.0B",
-	        [M, Day, Hour, Min, Sec])
-	.
+	        [M, Day, Hour, Min, Sec]).
