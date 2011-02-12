@@ -30,9 +30,9 @@
          handle_info/2, terminate/2, code_change/3, timestamp/0]).
 
 %% api callbacks
--export([start_link/0, send/3, send/4]).
+-export([start_link/0, send/3, send/4, send/7]).
 
--record(state, {socket, address, port}).
+-record(state, {socket, address, port, facility}).
 
 %%====================================================================
 %% api callbacks
@@ -42,10 +42,13 @@ start_link() ->
 
 send(Who, Level, Msg) when is_atom(Who), is_atom(Level), is_list(Msg) ->
     gen_server:cast(?MODULE, {send, Who, Level, Msg}).
-    
+
 send(Facility, Who, Level, Msg) when is_integer(Facility), is_atom(Who), is_atom(Level), is_list(Msg) ->
     gen_server:cast(?MODULE, {send, Facility, Who, Level, Msg}).
-    
+
+send(Module, Pid, Line, Facility, Who, Level, Msg) ->
+    gen_server:cast(?MODULE, {send, Module, Pid, Line, Facility, Who, Level, Msg}).
+
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -64,7 +67,8 @@ init([]) ->
             {ok, #state{
                     socket = Socket,
                     address = Hostname,
-                    port = 514
+                    port = 514,
+                    facility = atom_to_facility(user)
             }};
         {error, Reason} -> {stop, Reason}
     end.
@@ -89,10 +93,21 @@ handle_call(_Msg, _From, State) ->
 %%--------------------------------------------------------------------
 handle_cast({send, Who, Level, Msg}, State) ->
     handle_cast({send, 0, Who, Level, Msg}, State);
-    
+
 handle_cast({send, Facility, Who, Level, Msg}, State) ->
     {ok, Hostname} = inet:gethostname(),
     Packet = ["<", (Facility bor atom_to_level(Level))+48, ">", timestamp(), " ", Hostname, " ", atom_to_list(Who), "[0]: ",  Msg, "\n"],
+    do_send(State, Packet),
+    {noreply, State}.
+
+handle_cast({send, Module, Pid, Line, Who, Level, Msg}) ->
+    {ok, Hostname} = inet:gethostname(),
+    Packet = ["<", (Facility bor atom_to_level(Level))+48, ">",
+        timestamp(), " ", Hostname, " ", 
+        atom_to_list(Module), ":",
+        atom_to_list(Who),
+        "[", io_lib:format("~p",[Pid]), "]: ",
+        Msg, "\n"],
     do_send(State, Packet),
     {noreply, State}.
     
@@ -135,7 +150,9 @@ atom_to_level(error) -> 3; % error conditions
 atom_to_level(warning) -> 4; % warning conditions 
 atom_to_level(notice) -> 5; % normal but significant condition 
 atom_to_level(info) -> 6; % informational
-atom_to_level(debug) -> 7. % debug-level messages 
+atom_to_level(debug) -> 7. % debug-level messages
+
+atom_to_facility(user) -> 8.
 
 timestamp() ->
 	{{_Year,Month,Day},{Hour,Min,Sec}} = erlang:localtime(),
