@@ -37,7 +37,7 @@
     start_link/0, 
     %%send/3,
     %%send/4,
-    send/6
+    send/7
 ]).
 
 -record(state, {socket, address, port, facility}).
@@ -54,12 +54,12 @@ start_link() ->
 %%send(Facility, Who, Level, Msg) when is_integer(Facility), is_atom(Who), is_atom(Level), is_list(Msg) ->
 %%    gen_server:cast(?MODULE, {send, Facility, Who, Level, Msg}).
 
-send(Module, Pid, Line, Who, Level, Msg)
+send(Module, Pid, Line, Who, Level, Msg, Args)
 %%        when is_integer(Line), is_atom(Who), is_atom(Level), is_list(Msg) ->
     ->
     %%?INFO_MSG("send ~p", [Module, Pid, Line, Who, Level, Msg]),
     ejabberd_logger:debug_msg(?MODULE,?LINE,"syslog send ~p", [Module, Pid, Line, Who, Level, Msg]),
-    gen_server:cast(?MODULE, {send, Module, Pid, Line, Who, Level, Msg}).
+    gen_server:cast(?MODULE, {send, Module, Pid, Line, Who, Level, io_lib:format(Msg, Args)}).
 
 %%====================================================================
 %% gen_server callbacks
@@ -109,14 +109,9 @@ handle_call(_Msg, _From, State) ->
 
 handle_cast({send, Module, Pid, Line, Who, Level, Msg}, State) ->
     {ok, Hostname} = inet:gethostname(),
-    io:format("facility ~p", [
-        State#state.facility, atom_to_level(Level),
-        (State#state.facility bor atom_to_level(Level))+48
-    ]),
-    Packet = ["<", (State#state.facility bor atom_to_level(Level))+48, ">",
-        timestamp(), " ", Hostname, " ", 
-        Module, "/",
-        atom_to_list(Who),
+    Packet = [io_lib:format("<~B>", [(State#state.facility bor atom_to_level(Level))+48]),
+        timestamp(), " ", Hostname, " ",
+        atom_to_list(Who), "/", Module,
         io_lib:format("[~p]: ~p: ",[Pid, Line]),
         Msg, "\n"],
     do_send(State, Packet),
