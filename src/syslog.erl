@@ -37,7 +37,8 @@
     start_link/0, 
     %%send/3,
     %%send/4,
-    send/7
+    send/7,
+    settings/3
 ]).
 
 -record(state, {socket, address, port, facility}).
@@ -61,6 +62,12 @@ send(Module, Pid, Line, Who, Level, Msg, Args)
     ejabberd_logger:debug_msg(?MODULE,?LINE,"syslog send ~p", [Module, Pid, Line, Who, Level, Msg]),
     gen_server:cast(?MODULE, {send, Module, Pid, Line, Who, Level, io_lib:format(Msg, Args)}).
 
+settings(Ip, Port, Facility) ->
+    application:set_env(?MODULE, ip, Ip),
+    application:set_env(?MODULE, port, Port),
+    application:set_env(?MODULE, facility, Facility),
+    ok.
+
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
@@ -76,6 +83,7 @@ init([]) ->
     case gen_udp:open(0) of
         {ok, Socket} -> 
             %%ejabberd_logger:debug_msg(?MODULE,?LINE,"syslog start ~p", []),
+            ok = settings({127,0,0,1}, 514, user),
             {ok, Hostname} = inet:gethostname(),
             {ok, #state{
                     socket = Socket,
@@ -109,7 +117,9 @@ handle_call(_Msg, _From, State) ->
 
 handle_cast({send, Module, Pid, Line, Who, Level, Msg}, State) ->
     {ok, Hostname} = inet:gethostname(),
-    Packet = [io_lib:format("<~B>", [(State#state.facility bor atom_to_level(Level))+48]),
+    %%State#state.facility
+    {ok, Facility} = application:get_env(facility),
+    Packet = [io_lib:format("<~B>", [(atom_to_facility(Facility) bor atom_to_level(Level))+48]),
         timestamp(), " ", Hostname, " ",
         atom_to_list(Who), "/", Module,
         io_lib:format("[~p]: ~p: ",[Pid, Line]),
@@ -146,8 +156,10 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-do_send(#state{socket=Socket, address=Address, port=Port}, Packet) ->
-    gen_udp:send(Socket, Address, Port, Packet).
+do_send(#state{socket=Socket}, Packet) ->
+    {ok, IP} = application:get_env(ip),
+    {ok, Port} = application:get_env(port),
+    gen_udp:send(Socket, IP, Port, Packet).
     
 atom_to_level(emergency) -> 0; % system is unusable 
 atom_to_level(alert) -> 1; % action must be taken immediately 
@@ -158,7 +170,30 @@ atom_to_level(notice) -> 5; % normal but significant condition
 atom_to_level(info) -> 6; % informational
 atom_to_level(debug) -> 7. % debug-level messages
 
-atom_to_facility(user) -> 8.
+atom_to_facility(kernel)    -> 0;
+atom_to_facility(user)      -> 8;
+atom_to_facility(mail)      -> 16;
+atom_to_facility(system)    -> 24;
+atom_to_facility(security)  -> 32;
+atom_to_facility(syslogd)   -> 40;
+atom_to_facility(printer)   -> 48;
+atom_to_facility(nntp)      -> 56;
+atom_to_facility(uucp)      -> 64;
+atom_to_facility(clock)     -> 72;
+atom_to_facility(security2) -> 80;
+atom_to_facility(ftp)       -> 88;
+atom_to_facility(ntp)       -> 96;
+atom_to_facility(audit)     -> 104;
+atom_to_facility(alert)     -> 112;
+atom_to_facility(clock2)    -> 120;
+atom_to_facility(local0)    -> 128;
+atom_to_facility(local1)    -> 136;
+atom_to_facility(local2)    -> 144;
+atom_to_facility(local3)    -> 152;
+atom_to_facility(local4)    -> 160;
+atom_to_facility(local5)    -> 168;
+atom_to_facility(local6)    -> 176;
+atom_to_facility(local7)    -> 184.
 
 timestamp() ->
 	{{_Year,Month,Day},{Hour,Min,Sec}} = erlang:localtime(),

@@ -23,6 +23,13 @@ Include it:
 
 		-include_lib("syslog/src/syslog.hrl").
 
+Start it:
+
+		application:start(syslog),
+		ok = syslog:settings("localhost", 514, user),
+
+You can use default settings, and forget this line.
+
 Use it:
 
 		?SYSLOG_INFO(wombat, "~p is happy", ["Wombat"])
@@ -38,7 +45,7 @@ In th log, you've got : _application_, "/", _module_, "[", _pid_, "]: ", _line_,
 ### TODO
  * √ UDP
  * _ TCP
- * _ destination host
- * _ destination port
+ * √ destination host
+ * √ destination port
  * √ level
- * _ facility
+ * √ facility
